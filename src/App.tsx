@@ -1,122 +1,99 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import Button from './components/ui/Button/Button';
+import { TextInput } from './components/ui/TextInput/TextInput';
+import { TextArea } from './components/ui/TextArea/TextArea';
+import { Select } from './components/ui/Select/Select';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState('backlog');
+  const [priority, setPriority] = useState('medium');
+  const [error, setError] = useState('');
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!title.trim()) {
+      setError('Task title is required');
+      return;
+    }
+
+    setError('');
+    alert(`Task "${title}" is valid!`);
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main className="min-h-screen bg-slate-50 px-4 py-10">
+      <div className="mx-auto max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900">Create Task</h1>
 
-      <div className="ticks"></div>
+        <p className="mt-2 text-sm text-slate-500">
+          Everquint Design System — Form Preview
+        </p>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          <TextInput
+            label="Task Title"
+            placeholder="Enter task title"
+            value={title}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              if (error) setError('');
+            }}
+            error={error}
+            required
+          />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+          <TextArea
+            label="Description"
+            placeholder="Describe the task..."
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+
+          <Select
+            label="Status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            options={[
+              { label: 'Backlog', value: 'backlog' },
+              { label: 'In Progress', value: 'in-progress' },
+              { label: 'Done', value: 'done' },
+            ]}
+          />
+
+          <Select
+            label="Priority"
+            value={priority}
+            onChange={(event) => setPriority(event.target.value)}
+            options={[
+              { label: 'Low', value: 'low' },
+              { label: 'Medium', value: 'medium' },
+              { label: 'High', value: 'high' },
+            ]}
+          />
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setTitle('');
+                setDescription('');
+                setStatus('backlog');
+                setPriority('medium');
+                setError('');
+              }}
+            >
+              Reset
+            </Button>
+
+            <Button type="submit">Create Task</Button>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
 }
 
-export default App
+export default App;
