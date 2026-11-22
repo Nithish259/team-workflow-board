@@ -17,11 +17,6 @@ interface StoredTaskV1 {
   createdAt?: string;
 }
 
-interface StoredTasksV1 {
-  schemaVersion: 1;
-  tasks: StoredTaskV1[];
-}
-
 export interface LoadTasksResult {
   tasks: Task[];
   migrated: boolean;
