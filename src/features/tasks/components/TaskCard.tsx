@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Badge } from '../../../components/ui/Badge/Badge';
 import { Card } from '../../../components/ui/Card/Card';
 import type { Task, TaskPriority, TaskStatus } from '../../../types/task';
@@ -30,7 +31,7 @@ function formatRelativeTime(dateString: string): string {
   return `${days}d ago`;
 }
 
-export function TaskCard({ task, onEdit, onStatusChange }: TaskCardProps) {
+function TaskCard({ task, onEdit, onStatusChange }: TaskCardProps) {
   return (
     <Card className="space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -79,3 +80,5 @@ export function TaskCard({ task, onEdit, onStatusChange }: TaskCardProps) {
     </Card>
   );
 }
+
+export const MemoizedTaskCard = memo(TaskCard);

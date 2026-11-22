@@ -1,15 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import Button from '../../../components/ui/Button/Button';
 import { Modal } from '../../../components/ui/Modal/Modal';
 import { Toast, type ToastMessage } from '../../../components/ui/Toast/Toast';
-import { useMemo } from 'react';
 import { useTaskFilters } from '../../../hooks/useTaskFilters';
 import { TaskFiltersBar } from './TaskFiltersBar';
-// import { initialTasks } from '../../../data/initialTasks';
 import type { Task, TaskInput, TaskStatus } from '../../../types/task';
 
-import { TaskCard } from './TaskCard';
+import { MemoizedTaskCard } from './TaskCard';
 import { TaskForm } from './TaskForm';
 import { useTasks } from '../../../hooks/useTasks';
 import { Plus } from 'lucide-react';
@@ -56,11 +54,11 @@ export function TaskBoard() {
     setIsModalOpen(true);
   }
 
-  function openEditModal(task: Task) {
+  const openEditModal = useCallback((task: Task) => {
     setEditingTask(task);
     setIsFormDirty(false);
     setIsModalOpen(true);
-  }
+  }, []);
 
   function closeModal(force = false) {
     if (!force && isFormDirty) {
@@ -88,14 +86,18 @@ export function TaskBoard() {
     closeModal(true);
   }
 
-  function handleStatusChange(taskId: string, newStatus: TaskStatus) {
-    const task = tasks.find((item) => item.id === taskId);
+  const handleStatusChange = useCallback(
+    (taskId: string, newStatus: TaskStatus) => {
+      changeTaskStatus(taskId, newStatus);
 
-    if (!task || task.status === newStatus) return;
-
-    changeTaskStatus(taskId, newStatus);
-    showToast('Task status updated!');
-  }
+      setToast({
+        id: crypto.randomUUID(),
+        message: 'Task status updated!',
+        variant: 'success',
+      });
+    },
+    [changeTaskStatus],
+  );
 
   const filteredTasks = useMemo(() => {
     const searchTerm = filters.search.trim().toLowerCase();
@@ -182,7 +184,7 @@ export function TaskBoard() {
                   </p>
                 ) : (
                   columnTasks.map((task) => (
-                    <TaskCard
+                    <MemoizedTaskCard
                       key={task.id}
                       task={task}
                       onEdit={openEditModal}
