@@ -1,50 +1,47 @@
-# Architecture and Technical Notes
+# Team Workflow Board — Architecture
 
-## 1. Architecture Overview
+## 1. Overview
 
-The Team Workflow Board is a client-side React application organized by responsibility.
+The application is a client-side React and TypeScript workflow board. Its design separates presentation, transient drag interactions, task state, filter state and browser persistence. Task data has a single owner, and both drag-and-drop and dropdown interactions use the same status-update pathway.
 
-The architecture separates:
+## 2. Component architecture
 
-- **Presentation:** Reusable UI components and task-specific components.
-- **State management:** Custom hooks for tasks and filters.
-- **Data persistence:** Versioned localStorage utilities.
-- **Domain types:** TypeScript interfaces and union types.
-
-This separation makes it easier to test and extend individual parts of the application.
-
-## 2. Component Hierarchy
-
-```text
-App
-└── TaskBoard
-    ├── Create Task Button
-    ├── Storage Warning
-    ├── TaskFiltersBar
-    ├── Backlog Column
-    │   └── MemoizedTaskCard
-    ├── In Progress Column
-    │   └── MemoizedTaskCard
-    ├── Done Column
-    │   └── MemoizedTaskCard
-    ├── Modal
-    │   └── TaskForm
-    └── Toast
+```mermaid
+flowchart TD
+    A[App / DndProvider] --> B[TaskBoard]
+    B --> C[TaskFiltersBar]
+    B --> D[TaskColumn x 3]
+    D --> E[MemoizedTaskCard]
+    B --> F[Modal / TaskForm]
+    B --> G[Toast]
+    B --> H[useTasks]
+    B --> I[useTaskFilters]
+    H --> J[taskStorage]
+    J --> K[(Local Storage)]
+    I <--> L[URL query parameters]
 ```
 
-TaskBoard is the main coordinating component. It passes task data and event handlers to child components.
+| Module | Responsibility |
+|---|---|
+| App | Application shell and DndProvider with HTML5Backend |
+| TaskBoard | Coordinates state, filtering, columns, forms and notifications |
+| TaskColumn | Renders a workflow column and registers its drop target |
+| TaskCard | Renders task details, controls and drag source |
+| TaskForm | Collects and validates task input; reports dirty state |
+| TaskFiltersBar | Presents search, filtering and sorting controls |
+| useTasks | Owns task state, mutations and persistence lifecycle |
+| useTaskFilters | Manages filter state and URL synchronization |
+| taskStorage | Loads, validates, migrates and saves task data |
+| taskDnd | Defines drag item type and payload contract |
+| Shared UI | Reusable Button, Badge, Card, Modal and Toast components |
 
-The UI design system contains reusable Button, TextInput, TextArea, Select, Badge, Card, Modal, and Toast components.
+## 3. Domain model
 
-## 3. Task Data Model
+```ts
+export type TaskStatus = 'backlog' | 'in-progress' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high';
 
-A task is represented by the following TypeScript interface:
-
-```typescript
-type TaskStatus = 'backlog' | 'in-progress' | 'done';
-type TaskPriority = 'low' | 'medium' | 'high';
-
-interface Task {
+export interface Task {
   id: string;
   title: string;
   description: string;
@@ -55,217 +52,95 @@ interface Task {
   createdAt: string;
   updatedAt: string;
 }
+
+export type TaskInput = Pick<Task,
+  'title' | 'description' | 'status' | 'priority' | 'assignee' | 'tags'
+>;
 ```
 
-Union types restrict status and priority values to valid choices.
+IDs are generated using `crypto.randomUUID()`. Timestamps use ISO strings. TaskInput excludes system-managed IDs and timestamps. Creation initializes both timestamps; editing and actual status changes update `updatedAt`.
 
-`createdAt` and `updatedAt` are stored as ISO date strings so they can be serialized to JSON and compared for sorting.
+## 4. State management and data flow
 
-## 4. State Management
+`useTasks` owns the task collection. `TaskBoard` owns modal visibility, editing selection, form dirty state and success notifications. `useTaskFilters` manages search, selected statuses, priority and sort settings. React DnD owns transient drag and hover state, not persistent task data.
 
-### useTasks
+Task updates use functional state setters and immutable array transformations. Unchanged task objects retain their references. The board derives its visible tasks with `useMemo`, applying title/description search, status and priority filters, then sorting by priority or the selected timestamp. Each column receives only its matching tasks and an indicator of whether unfiltered tasks exist, allowing distinct empty-state messages.
 
-The `useTasks` hook manages the task collection and exposes operations for creating, editing, and changing task statuses.
+## 5. Drag-and-drop architecture
 
-Task updates are immutable. A changed task receives a new object, while unchanged tasks retain their existing object references.
+`DndProvider` in App supplies the shared drag-and-drop manager. The HTML5 backend connects the manager to native browser drag events.
 
-This supports predictable React updates and component memoization.
+```ts
+export const DND_ITEM_TYPES = { TASK: 'TASK' } as const;
 
-### useTaskFilters
-
-The `useTaskFilters` hook manages search, status filters, priority filters, and sorting.
-
-The hook reads initial selections from URL query parameters and writes updated selections back to the URL.
-
-This makes the current board view restorable after refresh and shareable through its URL.
-
-### Why not Redux or Zustand?
-
-The application has a limited state-management scope. Custom React hooks provide sufficient separation without introducing additional dependencies or architectural complexity.
-
-A more extensive application with multiple routes, server synchronization, and shared asynchronous state might justify a dedicated state-management or data-fetching solution.
-
-## 5. Persistence and Schema Migration
-
-Task data is stored under a dedicated localStorage key.
-
-The current schema uses version 2:
-
-```json
-{
-  "schemaVersion": 2,
-  "tasks": []
+export interface TaskDragItem {
+  id: string;
+  status: TaskStatus;
 }
 ```
 
-The storage layer validates saved data before loading it.
+TaskCard uses `useDrag` with a dedicated span handle and a separate card preview wrapper. The monitor supplies `isDragging`, which controls opacity. TaskColumn uses `useDrop` at the component's top level, avoiding hook calls inside the board's mapping loop. It accepts TASK items and rejects drops whose source status equals its own status. The monitor supplies hover and eligibility state for destination styling.
 
-### Version 1 to Version 2 Migration
+```mermaid
+flowchart TD
+    A[TaskCard useDrag] --> B[TaskColumn useDrop]
+    B --> C{Different status?}
+    C -->|No| D[Reject drop]
+    C -->|Yes| E[handleStatusChange]
+    F[Status dropdown] --> E
+    E --> G[useTasks.changeTaskStatus]
+    E --> H[Success toast]
+    G --> I[Immutable task state update]
+    I --> J[Derived filtered board]
+    I --> K[Persistence effect]
+    K --> L[(Local Storage)]
+```
 
-The simulated version 1 task structure may omit fields introduced in version 2.
+The payload contains only the task ID and source status, reducing coupling. A valid drop calls the existing status callback. The task collection is updated centrally; column counts and card positions follow from the derived board. Cancelling a drag or dropping outside a valid target does not invoke the status update. Same-column drops do not trigger a success notification or timestamp change.
 
-During migration:
+Active filters remain unchanged after movement. A task moved to an excluded status is hidden until the filters are adjusted. Sorting remains authoritative; drag-and-drop does not introduce manual ordering.
 
-- Missing descriptions and assignees receive empty strings.
-- Missing priorities receive `"medium"`.
-- Missing tags receive an empty array.
-- Missing dates receive valid fallback timestamps.
-- `updatedAt` is initialized using the creation timestamp where needed.
+## 6. Persistence and migration
 
-After migration, the application displays a non-intrusive notification.
+The storage utility encapsulates serialization, validation and version migration. The current schema is version 2, with support for migration from version 1. `useTasks` initializes state from `loadTasks(initialTasks)` using a lazy state initializer and saves changes through a `useEffect` dependent on the task collection and persistence eligibility.
 
-### Error Handling
+- Valid saved tasks are restored, including an intentionally empty collection.
+- Legacy supported data is migrated and a migration notice is displayed.
+- Corrupted or unsupported saved data is handled through the storage error pathway.
+- An initial load error disables automatic persistence for that mounted instance to avoid overwriting problematic saved data.
+- Save errors are exposed as storage warnings.
 
-The storage layer handles malformed JSON, invalid records, unsupported schema versions, and storage access failures.
+Storage is scoped to the browser origin. It is not a database or multi-user synchronization mechanism.
 
-If stored data cannot be loaded safely, the application can use fallback task data and display a warning rather than crashing.
+## 7. Accessibility and UX
 
-An intentionally saved empty task array is preserved instead of being mistaken for missing storage.
+Workflow sections expose accessible names. Task status selects remain keyboard-operable and provide an alternative to pointer dragging. The drag handle is supplementary rather than the only means of changing status. Modal and form interactions retain their existing accessibility behavior and unsaved-change confirmation. Notifications and storage warnings communicate operation outcomes. Responsive layouts support narrow and wide screens.
 
-### Trade-off
+## 8. Performance decisions
 
-localStorage is simple and requires no backend, but it does not provide multi-user synchronization, server-side validation, or durable cloud backups.
+- `React.memo` wraps TaskCard to reduce re-renders caused by unchanged props.
+- `useCallback` stabilizes edit and status callbacks passed to cards.
+- Immutable updates preserve references for unchanged task objects.
+- `useMemo` caches filtered and sorted results until tasks or filters change.
+- Drag monitors collect only relevant interaction state and handler IDs used by tests.
 
-## 6. Filtering and Sorting
+Memoization does not prevent updates from a card's own hook subscriptions. Moving a card between columns can unmount and remount it. Filtering and sorting still run when their dependencies change; the board is not virtualized. No numerical performance benchmark is claimed.
 
-Filtering and sorting are derived from task state rather than stored as a second task collection.
+## 9. Testing architecture
 
-Filtering supports:
+Production uses HTML5Backend; tests use React DnD TestBackend through `renderWithDnd`. The helper provides a DnD context and exposes the test backend. Handler IDs are obtained dynamically from monitor-generated DOM data attributes rather than hardcoded.
 
-- Multiple selected statuses.
-- Priority.
-- Case-insensitive text matching against title and description.
+Tests simulate begin-drag, hover, drop and end-drag inside React Testing Library's `act`. Deterministic fixtures are saved using the real storage utility. Assertions verify accessible column membership, status controls, feedback classes, notifications and persisted data.
 
-Sorting supports:
+| Suite | Tests |
+|---|---:|
+| TaskBoard | 4 |
+| Storage | 4 |
+| Drag-and-drop integration | 12 |
+| **Total** | **20** |
 
-- Creation timestamp.
-- Update timestamp.
-- Priority.
+The integration tests exercise the real drag-and-drop hooks, not mocked replacements. They do not simulate native browser pointer behavior; 21 manual browser checks complement them. Type checking and production builds are separate verification gates.
 
-`useMemo` caches the derived task list until task data or filter state changes.
+## 10. Trade-offs and future extensions
 
-This avoids unnecessary recalculation during unrelated UI updates, such as opening a modal.
-
-## 7. Performance Optimization
-
-### Problem
-
-React DevTools Profiler was used to inspect rendering behavior during task status updates.
-
-An earlier selected update showed all three TaskCard components rendering.
-
-### Changes
-
-**React.memo**
-
-TaskCard was wrapped with `React.memo`, allowing React to skip rendering when its props are unchanged.
-
-**useCallback**
-
-TaskBoard event handlers were memoized to keep function references stable across unrelated parent renders.
-
-**Immutable updates**
-
-The task state updater creates a new object only for a task whose status actually changes.
-
-Unchanged tasks retain their previous references.
-
-**useMemo**
-
-The board's filtered and sorted task list is memoized.
-
-### Verification
-
-A later controlled single-task status update showed only the affected TaskCard in the selected React Profiler commit. The two unchanged TaskCards were absent.
-
-This supports the conclusion that unnecessary TaskCard rendering was reduced.
-
-### Measurement Limitation
-
-The available profiling screenshots do not establish a reliable overall rendering-time improvement. Different commits and development-mode conditions can produce different timings.
-
-Therefore, the documented improvement is reduced unnecessary component rendering, not a claimed percentage reduction in execution time.
-
-### Trade-off
-
-Memoization introduces prop-reference considerations and some comparison overhead. It is justified here because task cards are repeated components and the board can re-render due to state changes unrelated to individual cards.
-
-## 8. Accessibility
-
-The application uses semantic controls and accessible labels for task interactions.
-
-The Modal uses the native HTML `dialog` element and its `showModal()` method.
-
-Focus management is handled using React refs and effects.
-
-The dialog supports keyboard interaction, including Escape handling, while the parent coordinates confirmation before discarding unsaved form changes.
-
-Task forms provide client-side validation and error feedback.
-
-The application also uses status messages and alerts for user feedback.
-
-## 9. Testing Strategy
-
-Vitest and React Testing Library are used to test user-facing workflows and storage logic.
-
-### Component Tests
-
-TaskBoard tests cover task creation, status updates, search filtering, and required-title validation.
-
-### Storage Tests
-
-Storage tests cover version migration, corrupted JSON, empty saved task collections, and unsupported versions.
-
-### Environment
-
-Tests run in jsdom to provide browser-like APIs, including document, window, and localStorage.
-
-### Verification
-
-At the latest verification:
-
-- Eight automated tests passed.
-- The TypeScript and Vite production build completed successfully.
-- Core UI interactions were manually checked.
-
-## 10. Refactoring Decisions
-
-### Refactor: Stabilizing TaskCard Props
-
-Initially, TaskBoard passed callback functions created during each render.
-
-This meant TaskCard could receive new function references even when its task data was unchanged.
-
-The handlers were refactored using `useCallback`, and TaskCard was wrapped with `React.memo`.
-
-The existing task updater already preserved unchanged object references, enabling memoization to work effectively.
-
-The result was verified using React DevTools Profiler.
-
-### Refactor: Test Environment Configuration
-
-The first test run failed because localStorage was unavailable.
-
-Vitest was configured to use jsdom, allowing tests to execute with simulated browser APIs.
-
-### Refactor: TypeScript Cleanup
-
-Unused imports and type declarations were removed after the production build identified them.
-
-This preserved strict compiler checks instead of disabling them.
-
-## 11. AI Assistance and Review
-
-During development, issues were identified through actual test execution, TypeScript compilation, browser checks, and React DevTools profiling. The implementation was adjusted based on those findings.
-
-Examples include correcting the Vitest environment, removing unused declarations, and verifying the TaskCard optimization rather than assuming memoization improved performance.
-
-## 12. Future Improvements
-
-With additional development time, the application could add:
-
-- Import and export of task data.
-- Additional keyboard and accessibility automation.
-- More comprehensive form and persistence tests.
-- Backend synchronization and multi-user collaboration.
-- Performance measurements using larger task datasets.
+The HTML5 backend keeps desktop interaction straightforward but does not provide dedicated touch or keyboard dragging. The status dropdown remains the alternative. Manual ordering is intentionally excluded to avoid conflicts with sorting. Browser-local storage simplifies the assessment but does not support shared collaboration, server-side authorization or cross-device synchronization. Future extensions could include a touch-capable backend, explicit ordering rules, server persistence and browser end-to-end tests.

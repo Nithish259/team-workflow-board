@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-
+import { renderWithDnd } from '../../../test/renderWithDnd';
 import { TaskBoard } from './TaskBoard';
 import { STORAGE_KEY } from '../../../utils/taskStorage';
 
@@ -14,7 +14,7 @@ describe('TaskBoard', () => {
   it('creates a task and displays it in Backlog', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBoard />);
+    renderWithDnd(<TaskBoard />);
 
     await user.click(screen.getByRole('button', { name: /create task/i }));
 
@@ -52,7 +52,7 @@ describe('TaskBoard', () => {
   it('moves a task from Backlog to Done', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBoard />);
+    renderWithDnd(<TaskBoard />);
 
     const backlog = screen.getByRole('region', {
       name: /backlog tasks/i,
@@ -81,7 +81,7 @@ describe('TaskBoard', () => {
   it('filters tasks by title', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBoard />);
+    renderWithDnd(<TaskBoard />);
 
     await user.type(
       screen.getByRole('textbox', {
@@ -100,7 +100,7 @@ describe('TaskBoard', () => {
   it('rejects an empty task title', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBoard />);
+    renderWithDnd(<TaskBoard />);
 
     await user.click(screen.getByRole('button', { name: /create task/i }));
 

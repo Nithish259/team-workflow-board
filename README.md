@@ -17,6 +17,22 @@ Built as part of the Everquint frontend technical assessment.
 - **User feedback:** Display validation errors, storage warnings, and toast notifications.
 - **Reusable design system:** Button, TextInput, TextArea, Select, Badge, Card, Modal, and Toast.
 
+### Drag-and-Drop Task Management
+
+- Move tasks between Backlog, In Progress, and Done using React DnD.
+- Dedicated drag handles prevent interference with card controls.
+- Visual feedback identifies valid drop destinations.
+- Dragged cards become partially transparent during movement.
+- Same-column drops are rejected to prevent redundant updates.
+- Cancelled drag operations preserve the original task state.
+- Successful drops update task status, modification timestamps,
+  column counts, and local storage.
+- Success toast notifications provide immediate feedback.
+- Existing status dropdowns remain available as an accessible
+  alternative for keyboard and touch-device users.
+- Active search, filtering, and sorting rules remain respected.
+
+
 ## Technology Stack
 
 - React with TypeScript

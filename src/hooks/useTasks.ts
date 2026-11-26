@@ -34,17 +34,19 @@ export function useTasks(): UseTasksResult {
   // Prevent corrupted/unsupported stored data from being overwritten.
   const [canPersist] = useState(initialLoad.error === null);
 
-  useEffect(() => {
-    if (!canPersist) return;
+  
+useEffect(() => {
+  if (!canPersist) return;
 
-    const error = saveTasks(tasks);
+  const error = saveTasks(tasks);
 
-    if (error) {
-      setStorageError(error);
-    } else {
-      setStorageError(null);
-    }
-  }, [tasks, canPersist]);
+  // Synchronize the UI with the result of the external
+  // localStorage operation. This state cannot be derived
+  // from the task data alone.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  setStorageError(error);
+}, [tasks, canPersist]);
+
 
   const dismissMigrationNotice = useCallback(() => {
     setMigrationNotice(false);
