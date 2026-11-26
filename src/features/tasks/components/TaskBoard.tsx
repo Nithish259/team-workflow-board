@@ -3,16 +3,22 @@ import { useCallback, useMemo, useState } from 'react';
 import Button from '../../../components/ui/Button/Button';
 import { Modal } from '../../../components/ui/Modal/Modal';
 import { Toast, type ToastMessage } from '../../../components/ui/Toast/Toast';
+
 import { useTaskFilters } from '../../../hooks/useTaskFilters';
+import { useTasks } from '../../../hooks/useTasks';
+
 import { TaskFiltersBar } from './TaskFiltersBar';
+import { TaskColumn } from './TaskColumn';
+import { TaskForm } from './TaskForm';
+
 import type { Task, TaskInput, TaskStatus } from '../../../types/task';
 
-import { MemoizedTaskCard } from './TaskCard';
-import { TaskForm } from './TaskForm';
-import { useTasks } from '../../../hooks/useTasks';
 import { Plus } from 'lucide-react';
 
-const columns: { id: TaskStatus; title: string }[] = [
+const columns: {
+  id: TaskStatus;
+  title: string;
+}[] = [
   { id: 'backlog', title: 'Backlog' },
   { id: 'in-progress', title: 'In Progress' },
   { id: 'done', title: 'Done' },
@@ -30,10 +36,13 @@ export function TaskBoard() {
   } = useTasks();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
   const [isFormDirty, setIsFormDirty] = useState(false);
 
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
   const { filters, updateFilters } = useTaskFilters();
 
   const closeToast = useCallback(() => {
@@ -121,19 +130,16 @@ export function TaskBoard() {
       return matchesStatus && matchesPriority && matchesSearch;
     });
 
-    return matchingTasks.sort((a, b) => {
-      let comparison = 0;
+    
+return matchingTasks.sort((a, b) => {
+  const comparison =
+    filters.sortBy === 'priority'
+      ? priorityOrder[a.priority] - priorityOrder[b.priority]
+      : new Date(a[filters.sortBy]).getTime() -
+        new Date(b[filters.sortBy]).getTime();
 
-      if (filters.sortBy === 'priority') {
-        comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
-      } else {
-        comparison =
-          new Date(a[filters.sortBy]).getTime() -
-          new Date(b[filters.sortBy]).getTime();
-      }
-
-      return filters.sortDirection === 'asc' ? comparison : -comparison;
-    });
+  return filters.sortDirection === 'asc' ? comparison : -comparison;
+});
   }, [tasks, filters]);
 
   return (
@@ -155,45 +161,31 @@ export function TaskBoard() {
 
       <TaskFiltersBar filters={filters} onChange={updateFilters} />
 
+      <p className="text-sm text-slate-500">
+        Drag tasks using their handles to move them between columns, or use the
+        status dropdown.
+      </p>
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {columns.map((column) => {
           const columnTasks = filteredTasks.filter(
             (task) => task.status === column.id,
           );
 
+          const hasUnfilteredTasks = tasks.some(
+            (task) => task.status === column.id,
+          );
+
           return (
-            <section
+            <TaskColumn
               key={column.id}
-              aria-label={`${column.title} tasks`}
-              className="min-h-80 rounded-xl bg-slate-100 p-4"
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-semibold text-slate-800">{column.title}</h2>
-
-                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                  {columnTasks.length}
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {columnTasks.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                    {tasks.some((task) => task.status === column.id)
-                      ? 'No tasks match your filters'
-                      : 'No tasks in this column'}
-                  </p>
-                ) : (
-                  columnTasks.map((task) => (
-                    <MemoizedTaskCard
-                      key={task.id}
-                      task={task}
-                      onEdit={openEditModal}
-                      onStatusChange={handleStatusChange}
-                    />
-                  ))
-                )}
-              </div>
-            </section>
+              status={column.id}
+              title={column.title}
+              tasks={columnTasks}
+              hasUnfilteredTasks={hasUnfilteredTasks}
+              onEdit={openEditModal}
+              onStatusChange={handleStatusChange}
+            />
           );
         })}
       </div>
