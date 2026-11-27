@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 
-import { initialTasks } from '../data/initialTasks';
 import type { Task, TaskInput, TaskStatus } from '../types/task';
+
 import {
-  loadTasks,
-  saveTasks,
-  type LoadTasksResult,
-} from '../utils/taskStorage';
+  taskCreated,
+  taskUpdated,
+  taskStatusChanged,
+  migrationNoticeDismissed,
+} from '../features/tasks/taskSlice';
+
+import {
+  selectTasks,
+  selectStorageError,
+  selectMigrationNotice,
+} from '../features/tasks/taskSelectors';
+import { useAppDispatch, useAppSelector } from '../store/hook';
 
 interface UseTasksResult {
   tasks: Task[];
@@ -19,79 +27,38 @@ interface UseTasksResult {
 }
 
 export function useTasks(): UseTasksResult {
-  const [initialLoad] = useState<LoadTasksResult>(() =>
-    loadTasks(initialTasks),
-  );
+  const dispatch = useAppDispatch();
 
-  const [tasks, setTasks] = useState<Task[]>(initialLoad.tasks);
+  const tasks = useAppSelector(selectTasks);
 
-  const [storageError, setStorageError] = useState<string | null>(
-    initialLoad.error,
-  );
+  const storageError = useAppSelector(selectStorageError);
 
-  const [migrationNotice, setMigrationNotice] = useState(initialLoad.migrated);
-
-  // Prevent corrupted/unsupported stored data from being overwritten.
-  const [canPersist] = useState(initialLoad.error === null);
-
-  
-useEffect(() => {
-  if (!canPersist) return;
-
-  const error = saveTasks(tasks);
-
-  // Synchronize the UI with the result of the external
-  // localStorage operation. This state cannot be derived
-  // from the task data alone.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  setStorageError(error);
-}, [tasks, canPersist]);
-
+  const migrationNotice = useAppSelector(selectMigrationNotice);
 
   const dismissMigrationNotice = useCallback(() => {
-    setMigrationNotice(false);
-  }, []);
+    dispatch(migrationNoticeDismissed());
+  }, [dispatch]);
 
-  const createTask = useCallback((data: TaskInput) => {
-    const now = new Date().toISOString();
+  const createTask = useCallback(
+    (data: TaskInput) => {
+      dispatch(taskCreated(data));
+    },
+    [dispatch],
+  );
 
-    const newTask: Task = {
-      ...data,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
-    };
+  const updateTask = useCallback(
+    (id: string, data: TaskInput) => {
+      dispatch(taskUpdated(id, data));
+    },
+    [dispatch],
+  );
 
-    setTasks((previous) => [newTask, ...previous]);
-  }, []);
-
-  const updateTask = useCallback((id: string, data: TaskInput) => {
-    setTasks((previous) =>
-      previous.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              ...data,
-              updatedAt: new Date().toISOString(),
-            }
-          : task,
-      ),
-    );
-  }, []);
-
-  const changeTaskStatus = useCallback((id: string, status: TaskStatus) => {
-    setTasks((previous) =>
-      previous.map((task) =>
-        task.id === id && task.status !== status
-          ? {
-              ...task,
-              status,
-              updatedAt: new Date().toISOString(),
-            }
-          : task,
-      ),
-    );
-  }, []);
+  const changeTaskStatus = useCallback(
+    (id: string, status: TaskStatus) => {
+      dispatch(taskStatusChanged(id, status));
+    },
+    [dispatch],
+  );
 
   return {
     tasks,
